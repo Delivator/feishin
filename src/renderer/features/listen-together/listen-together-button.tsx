@@ -1,0 +1,117 @@
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import {
+    hostSession,
+    joinSession,
+    leaveSession,
+    useListenTogetherStore,
+} from '/@/renderer/features/listen-together/listen-together';
+import { ActionIcon } from '/@/shared/components/action-icon/action-icon';
+import { Button } from '/@/shared/components/button/button';
+import { CopyButton } from '/@/shared/components/copy-button/copy-button';
+import { Group } from '/@/shared/components/group/group';
+import { Popover } from '/@/shared/components/popover/popover';
+import { Stack } from '/@/shared/components/stack/stack';
+import { TextInput } from '/@/shared/components/text-input/text-input';
+import { Text } from '/@/shared/components/text/text';
+
+export const ListenTogetherButton = () => {
+    const { t } = useTranslation();
+    const { code, members, role, status } = useListenTogetherStore();
+    const [joinCode, setJoinCode] = useState('');
+
+    return (
+        <Popover position="top" withArrow>
+            <Popover.Target>
+                <ActionIcon
+                    icon="users"
+                    iconProps={{
+                        color: status === 'connected' ? 'primary' : undefined,
+                        size: 'lg',
+                    }}
+                    size="sm"
+                    tooltip={{ label: t('listenTogether.title'), openDelay: 0 }}
+                    variant="subtle"
+                />
+            </Popover.Target>
+            <Popover.Dropdown maw={360} miw={280} onClick={(e) => e.stopPropagation()} p="sm">
+                <Stack gap="sm">
+                    <Text fw={600} size="sm">
+                        {t('listenTogether.title')}
+                    </Text>
+
+                    {status === 'idle' && (
+                        <>
+                            <Text isMuted size="xs">
+                                {t('listenTogether.description')}
+                            </Text>
+                            <Button onClick={hostSession} variant="filled">
+                                {t('listenTogether.host')}
+                            </Button>
+                            <Group gap="xs" wrap="nowrap">
+                                <TextInput
+                                    onChange={(e) => setJoinCode(e.currentTarget.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && joinCode.trim()) {
+                                            joinSession(joinCode);
+                                        }
+                                    }}
+                                    placeholder={t('listenTogether.code')}
+                                    style={{ flex: 1 }}
+                                    value={joinCode}
+                                />
+                                <Button
+                                    disabled={!joinCode.trim()}
+                                    onClick={() => joinSession(joinCode)}
+                                    variant="default"
+                                >
+                                    {t('listenTogether.join')}
+                                </Button>
+                            </Group>
+                            <Text isMuted size="xs">
+                                {t('listenTogether.joinWarning')}
+                            </Text>
+                        </>
+                    )}
+
+                    {status === 'connecting' && (
+                        <Text size="sm">{t('listenTogether.connecting')}</Text>
+                    )}
+
+                    {status === 'connected' && (
+                        <>
+                            <Group justify="space-between" wrap="nowrap">
+                                <Text ff="monospace" fw={700} size="xl">
+                                    {code}
+                                </Text>
+                                {role === 'host' && code && (
+                                    <CopyButton value={code}>
+                                        {({ copied, copy }) => (
+                                            <Button
+                                                onClick={copy}
+                                                size="compact-xs"
+                                                variant="subtle"
+                                            >
+                                                {copied
+                                                    ? t('listenTogether.copied')
+                                                    : t('listenTogether.copy')}
+                                            </Button>
+                                        )}
+                                    </CopyButton>
+                                )}
+                            </Group>
+                            <Text isMuted size="xs">
+                                {t('listenTogether.members', { count: members.length })}
+                            </Text>
+                            <Text size="sm">{members.join(', ')}</Text>
+                            <Button onClick={leaveSession} variant="default">
+                                {t('listenTogether.leave')}
+                            </Button>
+                        </>
+                    )}
+                </Stack>
+            </Popover.Dropdown>
+        </Popover>
+    );
+};

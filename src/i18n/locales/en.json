@@ -1488,6 +1488,24 @@
             "individualControl": "Release Shift to modify all speaker volumes"
         }
     },
+    "listenTogether": {
+        "title": "Listen together",
+        "description": "Sync playback and the queue with friends over a direct peer-to-peer connection. Everyone needs access to the same music library.",
+        "host": "Start session",
+        "join": "Join",
+        "code": "Session code",
+        "joinWarning": "Joining replaces your current queue with the host's.",
+        "connecting": "Connecting...",
+        "copy": "Copy",
+        "copied": "Copied",
+        "leave": "Leave session",
+        "members_one": "{{count}} listener",
+        "members_other": "{{count}} listeners",
+        "notFound": "No session found with that code",
+        "connectionFailed": "Could not connect to the listen together session",
+        "ended": "The listen together session has ended",
+        "libraryMismatch": "Listen together needs everyone on the same server. A participant's songs were not found in your library."
+    },
     "dragDropZone": {
         "error_oneFileOnly": "Please only select 1 file",
         "error_readingFile": "There has been an issue reading the file: {{errorMessage}}",

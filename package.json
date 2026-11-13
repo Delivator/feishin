@@ -133,6 +133,7 @@
         "node-ssdp": "^4.0.1",
         "overlayscrollbars": "^2.16.0",
         "overlayscrollbars-react": "^0.5.6",
+        "peerjs": "^1.5.5",
         "qs": "^6.15.2",
         "react": "^19.2.7",
         "react-call": "^1.8.2",
