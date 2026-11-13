@@ -1,0 +1,32 @@
+name: Build (listen together)
+
+on:
+    workflow_dispatch:
+    push:
+        branches:
+            - feat/listen-together
+
+jobs:
+    windows:
+        runs-on: windows-latest
+        env:
+            NODE_OPTIONS: --max-old-space-size=4096
+
+        steps:
+            - name: Checkout git repo
+              uses: actions/checkout@v6
+
+            - name: Install Node and PNPM
+              uses: pnpm/action-setup@v4
+
+            - name: Install dependencies
+              run: pnpm install
+
+            - name: Build for Windows
+              run: pnpm run package:win:pr
+
+            - name: Upload Windows binaries
+              uses: actions/upload-artifact@v7
+              with:
+                  name: feishin-windows
+                  path: dist/*.exe
