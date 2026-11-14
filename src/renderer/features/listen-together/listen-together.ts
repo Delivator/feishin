@@ -118,13 +118,13 @@ const buildStateMessage = (): StateMessage => ({
     uid: getCurrentUid(),
 });
 
-const send = (msg: Message, except?: DataConnection) => {
+const send = (msg: Message) => {
     if (hostConn) {
         if (hostConn.open) hostConn.send(msg);
         return;
     }
     guests.forEach((_, conn) => {
-        if (conn !== except && conn.open) conn.send(msg);
+        if (conn.open) conn.send(msg);
     });
 };
 
@@ -307,16 +307,20 @@ const handleMessage = async (msg: Message, from: DataConnection) => {
                 if (ok) trusted.add(from);
             }
             applyQueue(msg);
-            // Host relays to the other guests (the sender already has it).
-            if (!hostConn) send(msg, from);
+            // Host relays to everyone, the sender included: if the host or another guest
+            // edited the queue at the same time, the edits crossed in flight, and echoing
+            // the host's final version makes all peers converge on it.
+            if (!hostConn) send(msg);
             break;
         case 'reject':
             rejectPeer(from);
             break;
         case 'state':
-            if (!trusted.has(from)) return;
+            // No trust check: states only point at songs already in our queue, and
+            // applyState ignores unknown ones. Gating here silently dropped play/pause
+            // from guests on a different server URL until they added a new song.
             applyState(msg);
-            if (!hostConn) send(msg, from);
+            if (!hostConn) send(msg);
             break;
     }
 };

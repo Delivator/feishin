@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import React, { useEffect } from 'react';
 
 import { eventEmitter } from '/@/renderer/events/event-emitter';
+import { useListenTogetherStore } from '/@/renderer/features/listen-together/listen-together';
 import { runAutoDjAlbumIds } from '/@/renderer/features/player/auto-dj/auto-dj-albums';
 import { runAutoDjSongs } from '/@/renderer/features/player/auto-dj/auto-dj-songs';
 import { useIsPlayerFetching, usePlayer } from '/@/renderer/features/player/context/player-context';
@@ -53,6 +54,12 @@ export const useAutoDJ = () => {
             },
             async (properties) => {
                 if (!settings.enabled) {
+                    return;
+                }
+
+                // In a listen together session only the host picks songs; guests get them
+                // through the synced queue. Otherwise every peer adds its own random picks.
+                if (useListenTogetherStore.getState().role === 'guest') {
                     return;
                 }
 
