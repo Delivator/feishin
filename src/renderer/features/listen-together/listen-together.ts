@@ -84,6 +84,7 @@ let heartbeat: ReturnType<typeof setInterval> | undefined;
 let applying = 0;
 let lastQueueSig = '';
 let queueSendTimer: ReturnType<typeof setTimeout> | undefined;
+let stateDirty = false;
 // Peers confirmed to use the same library (same server URL, or songs spot-checked).
 let trusted = new WeakSet<DataConnection>();
 // Incoming messages are handled one at a time, since library checks are async.
@@ -209,20 +210,32 @@ const sendQueue = () => {
     send(msg);
 };
 
-// Coalesce bursts of queue mutations into one message.
+// Tags new songs, then sends the queue (before any state that may reference new songs).
+const flush = () => {
+    clearTimeout(queueSendTimer);
+    tagNewSongs();
+    sendQueue();
+    if (stateDirty) {
+        stateDirty = false;
+        send(buildStateMessage());
+    }
+};
+
+// Both run inside player store listeners, so they only schedule work. Updating the
+// store from inside a listener (tagging) makes zustand swallow the remaining
+// notifications of the outer update, which lost track/status changes.
 const scheduleQueueSend = () => {
     if (applying) return;
-    tagNewSongs();
     clearTimeout(queueSendTimer);
-    queueSendTimer = setTimeout(sendQueue, 150);
+    // Coalesce bursts of queue mutations into one message.
+    queueSendTimer = setTimeout(flush, 150);
 };
 
 const sendState = () => {
     if (applying) return;
-    // Queue must arrive before a state that references a new song.
+    stateDirty = true;
     clearTimeout(queueSendTimer);
-    sendQueue();
-    send(buildStateMessage());
+    queueSendTimer = setTimeout(flush, 0);
 };
 
 const hashServerUrl = async (url: string) => {
@@ -431,9 +444,12 @@ const receive = (msg: Message, from: DataConnection) => {
         .catch((error) => logger.error('Listen together: message failed', { error }));
 };
 
-const startSync = () => {
-    knownUids = new Set(usePlayerStoreBase.getState().queue.default);
+const startSync = (role: 'guest' | 'host') => {
     ensureAddedByColumn();
+    // The host's existing queue is attributed to the host. A guest's queue is about to
+    // be replaced by the host's, so it is left untagged.
+    knownUids = role === 'host' ? new Set() : new Set(usePlayerStoreBase.getState().queue.default);
+    if (role === 'host') tagNewSongs();
     unsubscribers = [
         subscribePlayerQueue(scheduleQueueSend),
         subscribePlayerRepeat(scheduleQueueSend),
@@ -499,8 +515,8 @@ export const hostSession = async () => {
         });
     });
 
+    startSync('host');
     lastQueueSig = queueSig(buildQueueMessage());
-    startSync();
     unsubscribers.push(
         useSettingsStore.subscribe(
             (state) => state.autoDJ.enabled,
@@ -548,7 +564,7 @@ export const joinSession = async (rawCode: string) => {
         leaveSession();
     });
     conn.send(await buildHello());
-    startSync();
+    startSync('guest');
     setStore({ status: 'connected' });
     logger.info('Listen together: joined', { code });
 };
@@ -558,6 +574,7 @@ export const leaveSession = () => {
     unsubscribers = [];
     clearInterval(heartbeat);
     clearTimeout(queueSendTimer);
+    stateDirty = false;
     const conn = hostConn;
     hostConn = null;
     conn?.close();
