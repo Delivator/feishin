@@ -12,12 +12,20 @@ import {
     subscribePlayerStatus,
     useAuthStore,
     usePlayerStoreBase,
+    useSettingsStore,
     useTimestampStoreBase,
 } from '/@/renderer/store';
 import { logger } from '/@/renderer/utils/logger';
 import { toast } from '/@/shared/components/toast/toast';
-import { QueueSong } from '/@/shared/types/domain-types';
-import { PlayerRepeat, PlayerShuffle, PlayerStatus } from '/@/shared/types/types';
+import { QueueSong, QueueSongAddedBy } from '/@/shared/types/domain-types';
+import {
+    ItemListKey,
+    PlayerRepeat,
+    PlayerShuffle,
+    PlayerStatus,
+    ServerType,
+    TableColumn,
+} from '/@/shared/types/types';
 
 // Peer-to-peer "listen together" over WebRTC data channels.
 // Star topology: the host is the source of truth and relays. Guests send their local
@@ -29,14 +37,18 @@ const HEARTBEAT_MS = 4000;
 const DRIFT_TOLERANCE_S = 2.5;
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
+export type ListenTogetherMember = { name: string; userId: null | string };
+
 interface ListenTogetherState {
     code: null | string;
-    members: string[];
+    hostAutoDJ: boolean;
+    members: ListenTogetherMember[];
     role: 'guest' | 'host' | null;
     status: 'connected' | 'connecting' | 'idle';
 }
 
 type Message =
+    | { autoDJ: boolean; members: ListenTogetherMember[]; t: 'members' }
     | {
           items: QueueSong[];
           repeat: PlayerRepeat;
@@ -44,8 +56,12 @@ type Message =
           shuffled: number[];
           t: 'queue';
       }
-    | { name: string; serverType: string; t: 'hello'; urlHash: string }
-    | { names: string[]; t: 'members' }
+    | {
+          member: ListenTogetherMember;
+          serverKey: string;
+          serverType: string;
+          t: 'hello';
+      }
     | { pos: number; status: PlayerStatus; t: 'state'; uid: null | string }
     | { t: 'reject' };
 type QueueMessage = Extract<Message, { t: 'queue' }>;
@@ -54,6 +70,7 @@ type StateMessage = Extract<Message, { t: 'state' }>;
 
 export const useListenTogetherStore = createWithEqualityFn<ListenTogetherState>()(() => ({
     code: null,
+    hostAutoDJ: false,
     members: [],
     role: null,
     status: 'idle',
@@ -61,7 +78,7 @@ export const useListenTogetherStore = createWithEqualityFn<ListenTogetherState>(
 
 let peer: null | Peer = null;
 let hostConn: DataConnection | null = null;
-const guests = new Map<DataConnection, string>();
+const guests = new Map<DataConnection, ListenTogetherMember>();
 let unsubscribers: (() => void)[] = [];
 let heartbeat: ReturnType<typeof setInterval> | undefined;
 let applying = 0;
@@ -73,11 +90,67 @@ let trusted = new WeakSet<DataConnection>();
 let inbox = Promise.resolve();
 // Skip heartbeats while a delayed seek is pending, so they don't broadcast a stale position.
 let seekPendingUntil = 0;
+// Queue entries that existed before the session or were already attributed.
+let knownUids = new Set<string>();
+// >0 while auto DJ is adding songs, so they get attributed to it.
+let autoDJDepth = 0;
+
+const QUEUE_LIST_KEYS = [ItemListKey.QUEUE_SONG, ItemListKey.SIDE_QUEUE, ItemListKey.FULL_SCREEN];
 
 const setStore = (partial: Partial<ListenTogetherState>) =>
     useListenTogetherStore.setState(partial);
 
-const myName = () => useAuthStore.getState().currentServer?.username || 'Guest';
+const myMember = (): ListenTogetherMember => {
+    const server = useAuthStore.getState().currentServer;
+    return { name: server?.username || 'Guest', userId: server?.userId ?? null };
+};
+
+export const runAsAutoDJ = async (fn: () => Promise<unknown> | unknown) => {
+    autoDJDepth++;
+    try {
+        await fn();
+    } finally {
+        autoDJDepth--;
+    }
+};
+
+// Attribute queue entries that appeared locally to us (or to auto DJ).
+const tagNewSongs = () => {
+    const { queue } = usePlayerStoreBase.getState();
+    const fresh = queue.default.filter((uid) => !knownUids.has(uid));
+    fresh.forEach((uid) => knownUids.add(uid));
+    const untagged = fresh.filter((uid) => queue.songs[uid] && !queue.songs[uid]._addedBy);
+    if (!untagged.length) return;
+
+    const addedBy: QueueSongAddedBy = { ...myMember(), ...(autoDJDepth ? { autoDJ: true } : {}) };
+    applyRemote(() => {
+        usePlayerStoreBase.setState((state) => {
+            untagged.forEach((uid) => {
+                const song = state.queue.songs[uid];
+                if (song) song._addedBy = addedBy;
+            });
+        });
+    });
+};
+
+// Turn the "Added by" column on in the queue views the first time a session starts.
+// Once the column exists in a view's config, the user's choice is left alone.
+const ensureAddedByColumn = () => {
+    useSettingsStore.setState((state) => {
+        QUEUE_LIST_KEYS.forEach((key) => {
+            const columns = state.lists[key]?.table.columns;
+            if (!columns || columns.some((c) => c.id === TableColumn.ADDED_BY)) return;
+            columns.push({
+                align: 'center',
+                autoSize: false,
+                id: TableColumn.ADDED_BY,
+                isEnabled: true,
+                pinned: null,
+                width: 60,
+            });
+        });
+    });
+};
 
 const randomCode = () =>
     Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => CODE_ALPHABET[b % 32]).join('');
@@ -139,6 +212,7 @@ const sendQueue = () => {
 // Coalesce bursts of queue mutations into one message.
 const scheduleQueueSend = () => {
     if (applying) return;
+    tagNewSongs();
     clearTimeout(queueSendTimer);
     queueSendTimer = setTimeout(sendQueue, 150);
 };
@@ -157,15 +231,29 @@ const hashServerUrl = async (url: string) => {
     return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
 };
 
-const buildHello = async (): Promise<Message> => {
+// Identifies the server independent of the URL used to reach it. Jellyfin exposes a
+// stable server id; Subsonic/Navidrome have none, so fall back to a hash of the URL.
+const getServerKey = async () => {
     const server = useAuthStore.getState().currentServer;
-    return {
-        name: myName(),
-        serverType: server?.type ?? '',
-        t: 'hello',
-        urlHash: server ? await hashServerUrl(server.url) : '',
-    };
+    if (!server) return '';
+    if (server.type === ServerType.JELLYFIN) {
+        try {
+            const res = await fetch(`${server.url.replace(/\/+$/, '')}/System/Info/Public`);
+            const info = (await res.json()) as { Id?: string };
+            if (info.Id) return `jellyfin:${info.Id}`;
+        } catch (error) {
+            logger.warn('Listen together: could not read Jellyfin server id', { error });
+        }
+    }
+    return `url:${await hashServerUrl(server.url)}`;
 };
+
+const buildHello = async (): Promise<Message> => ({
+    member: myMember(),
+    serverKey: await getServerKey(),
+    serverType: useAuthStore.getState().currentServer?.type ?? '',
+    t: 'hello',
+});
 
 // The same server can be reached through different URLs (LAN vs. public), so when the
 // URLs differ, check that a few of the peer's songs exist on our own server.
@@ -205,6 +293,7 @@ const rejectPeer = (conn: DataConnection) => {
 
 const applyQueue = (msg: QueueMessage) => {
     lastQueueSig = queueSig(msg);
+    msg.items.forEach((item) => knownUids.add(item._uniqueId));
     const server = useAuthStore.getState().currentServer;
     if (!server) return;
 
@@ -273,28 +362,39 @@ const applyState = (msg: StateMessage) => {
 };
 
 const broadcastMembers = () => {
-    const names = [myName(), ...guests.values()];
-    setStore({ members: names });
-    send({ names, t: 'members' });
+    const members = [myMember(), ...guests.values()];
+    const autoDJ = useSettingsStore.getState().autoDJ.enabled;
+    setStore({ hostAutoDJ: autoDJ, members });
+    send({ autoDJ, members, t: 'members' });
 };
 
 const handleMessage = async (msg: Message, from: DataConnection) => {
     switch (msg.t) {
         case 'hello': {
             const server = useAuthStore.getState().currentServer;
-            if (!server || msg.serverType !== server.type) {
+            const ownKey = await getServerKey();
+            const bothJellyfin =
+                ownKey.startsWith('jellyfin:') && msg.serverKey.startsWith('jellyfin:');
+            if (
+                !server ||
+                msg.serverType !== server.type ||
+                (bothJellyfin && ownKey !== msg.serverKey)
+            ) {
                 rejectPeer(from);
                 return;
             }
-            if (msg.urlHash === (await hashServerUrl(server.url))) trusted.add(from);
+            // Same URL is enough for Subsonic/Navidrome. On Jellyfin the server id only
+            // proves it is the same server, so the song check still runs to confirm the
+            // peer's account can access the same libraries.
+            if (!bothJellyfin && ownKey === msg.serverKey) trusted.add(from);
             if (!hostConn) {
-                guests.set(from, msg.name);
+                guests.set(from, msg.member);
                 broadcastMembers();
             }
             break;
         }
         case 'members':
-            setStore({ members: msg.names });
+            setStore({ hostAutoDJ: msg.autoDJ, members: msg.members });
             break;
         case 'queue':
             if (!trusted.has(from)) {
@@ -332,6 +432,8 @@ const receive = (msg: Message, from: DataConnection) => {
 };
 
 const startSync = () => {
+    knownUids = new Set(usePlayerStoreBase.getState().queue.default);
+    ensureAddedByColumn();
     unsubscribers = [
         subscribePlayerQueue(scheduleQueueSend),
         subscribePlayerRepeat(scheduleQueueSend),
@@ -385,7 +487,7 @@ export const hostSession = async () => {
     attachPeerHandlers(peer);
     peer.on('connection', (conn) => {
         conn.on('open', async () => {
-            guests.set(conn, 'Guest');
+            guests.set(conn, { name: 'Guest', userId: null });
             conn.send(await buildHello());
             conn.send(buildQueueMessage());
             conn.send(buildStateMessage());
@@ -399,10 +501,20 @@ export const hostSession = async () => {
 
     lastQueueSig = queueSig(buildQueueMessage());
     startSync();
+    unsubscribers.push(
+        useSettingsStore.subscribe(
+            (state) => state.autoDJ.enabled,
+            () => broadcastMembers(),
+        ),
+    );
     heartbeat = setInterval(() => {
         if (guests.size && !applying && Date.now() > seekPendingUntil) send(buildStateMessage());
     }, HEARTBEAT_MS);
-    setStore({ members: [myName()], status: 'connected' });
+    setStore({
+        hostAutoDJ: useSettingsStore.getState().autoDJ.enabled,
+        members: [myMember()],
+        status: 'connected',
+    });
     logger.info('Listen together: hosting', { code });
 };
 
@@ -456,5 +568,6 @@ export const leaveSession = () => {
     p?.destroy();
     lastQueueSig = '';
     trusted = new WeakSet();
-    setStore({ code: null, members: [], role: null, status: 'idle' });
+    knownUids = new Set();
+    setStore({ code: null, hostAutoDJ: false, members: [], role: null, status: 'idle' });
 };

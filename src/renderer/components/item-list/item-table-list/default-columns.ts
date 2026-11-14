@@ -323,6 +323,20 @@ export const SONG_TABLE_COLUMNS: DefaultTableColumn[] = [
 
 export const PLAYLIST_SONG_TABLE_COLUMNS: DefaultTableColumn[] = SONG_TABLE_COLUMNS;
 
+// Queue views also offer who added a song during a listen together session.
+export const QUEUE_SONG_TABLE_COLUMNS: DefaultTableColumn[] = [
+    ...SONG_TABLE_COLUMNS,
+    {
+        align: 'center',
+        autoSize: false,
+        isEnabled: false,
+        label: i18n.t('table.config.label.addedBy'),
+        pinned: null,
+        value: TableColumn.ADDED_BY,
+        width: 60,
+    },
+];
+
 export const ALBUM_TABLE_COLUMNS: DefaultTableColumn[] = [
     {
         align: 'center',

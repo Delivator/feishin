@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import styles from './play-queue-list-controls.module.css';
 
 import { queryKeys } from '/@/renderer/api/query-keys';
-import { SONG_TABLE_COLUMNS } from '/@/renderer/components/item-list/item-table-list/default-columns';
+import { QUEUE_SONG_TABLE_COLUMNS } from '/@/renderer/components/item-list/item-table-list/default-columns';
 import { ItemListHandle } from '/@/renderer/components/item-list/types';
 import { usePlayer } from '/@/renderer/features/player/context/player-context';
 import { useRestoreQueue, useSaveQueue } from '/@/renderer/features/player/hooks/use-queue-restore';
@@ -282,7 +282,7 @@ export const PlayQueueListControls = ({
                             pagination: { hidden: true },
                         },
                     }}
-                    tableColumnsData={SONG_TABLE_COLUMNS}
+                    tableColumnsData={QUEUE_SONG_TABLE_COLUMNS}
                 />
             </Box>
         </Group>

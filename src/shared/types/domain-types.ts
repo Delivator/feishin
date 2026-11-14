@@ -73,8 +73,16 @@ export interface QueueData {
 }
 
 export type QueueSong = Song & {
+    _addedBy?: QueueSongAddedBy;
     _contextPlaylistId?: null | string;
     _uniqueId: string;
+};
+
+// Who added a song during a listen together session.
+export type QueueSongAddedBy = {
+    autoDJ?: boolean;
+    name: string;
+    userId?: null | string;
 };
 
 export interface SavedCollection {

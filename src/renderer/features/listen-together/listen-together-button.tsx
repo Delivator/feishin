@@ -104,7 +104,7 @@ export const ListenTogetherButton = () => {
                             <Text isMuted size="xs">
                                 {t('listenTogether.members', { count: members.length })}
                             </Text>
-                            <Text size="sm">{members.join(', ')}</Text>
+                            <Text size="sm">{members.map((m) => m.name).join(', ')}</Text>
                             <Button onClick={leaveSession} variant="default">
                                 {t('listenTogether.leave')}
                             </Button>

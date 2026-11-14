@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import { SONG_TABLE_COLUMNS } from '/@/renderer/components/item-list/item-table-list/default-columns';
+import { QUEUE_SONG_TABLE_COLUMNS } from '/@/renderer/components/item-list/item-table-list/default-columns';
 import { openFullScreenPlayerSettingsModal } from '/@/renderer/features/player/utils/open-full-screen-player-settings-modal';
 import {
     ListConfigMenu,
@@ -57,7 +57,7 @@ export const SharedFullscreenPlayerSettings = () => {
                         pagination: { hidden: true },
                     },
                 }}
-                tableColumnsData={SONG_TABLE_COLUMNS}
+                tableColumnsData={QUEUE_SONG_TABLE_COLUMNS}
             />
         </>
     );

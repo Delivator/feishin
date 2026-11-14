@@ -27,6 +27,7 @@ import i18n from '/@/i18n/i18n';
 import { useItemSelectionState } from '/@/renderer/components/item-list/helpers/item-list-state';
 import { isNoHorizontalPaddingColumn } from '/@/renderer/components/item-list/item-detail-list/utils';
 import { ActionsColumn } from '/@/renderer/components/item-list/item-table-list/columns/actions-column';
+import { AddedByColumn } from '/@/renderer/components/item-list/item-table-list/columns/added-by-column';
 import { AlbumArtistsColumn } from '/@/renderer/components/item-list/item-table-list/columns/album-artists-column';
 import { AlbumColumn } from '/@/renderer/components/item-list/item-table-list/columns/album-column';
 import { AlbumGroupColumn } from '/@/renderer/components/item-list/item-table-list/columns/album-group-column';
@@ -213,6 +214,9 @@ const ItemTableListColumnBase = (props: ItemTableListColumn) => {
             case TableColumn.ACTIONS:
             case TableColumn.SKIP:
                 return <ActionsColumn {...props} {...dragProps} controls={controls} type={type} />;
+
+            case TableColumn.ADDED_BY:
+                return <AddedByColumn {...props} {...dragProps} controls={controls} type={type} />;
 
             case TableColumn.ALBUM:
                 return <AlbumColumn {...props} {...dragProps} controls={controls} type={type} />;
@@ -1255,6 +1259,11 @@ export const columnLabelMap: Record<TableColumn, ReactNode | string> = {
     [TableColumn.ACTIONS]: (
         <Flex className={styles.headerIconWrapper}>
             <Icon fill="default" icon="ellipsisHorizontal" />
+        </Flex>
+    ),
+    [TableColumn.ADDED_BY]: (
+        <Flex className={styles.headerIconWrapper}>
+            <Icon icon="users" />
         </Flex>
     ),
     [TableColumn.ALBUM]: i18n.t('table.column.album', { postProcess: 'upperCase' }) as string,

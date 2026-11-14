@@ -2,7 +2,10 @@ import { useQueryClient } from '@tanstack/react-query';
 import React, { useEffect } from 'react';
 
 import { eventEmitter } from '/@/renderer/events/event-emitter';
-import { useListenTogetherStore } from '/@/renderer/features/listen-together/listen-together';
+import {
+    runAsAutoDJ,
+    useListenTogetherStore,
+} from '/@/renderer/features/listen-together/listen-together';
 import { runAutoDjAlbumIds } from '/@/renderer/features/player/auto-dj/auto-dj-albums';
 import { runAutoDjSongs } from '/@/renderer/features/player/auto-dj/auto-dj-songs';
 import { useIsPlayerFetching, usePlayer } from '/@/renderer/features/player/context/player-context';
@@ -116,11 +119,13 @@ export const useAutoDJ = () => {
                         });
 
                         if (albumsToAdd.length > 0) {
-                            await player.addToQueueByFetch(
-                                serverId,
-                                albumsToAdd,
-                                LibraryItem.ALBUM,
-                                Play.LAST,
+                            await runAsAutoDJ(() =>
+                                player.addToQueueByFetch(
+                                    serverId,
+                                    albumsToAdd,
+                                    LibraryItem.ALBUM,
+                                    Play.LAST,
+                                ),
                             );
 
                             eventEmitter.emit('AUTODJ_QUEUE_ADDED', {
@@ -145,7 +150,7 @@ export const useAutoDJ = () => {
                     });
 
                     if (songsToAdd.length > 0) {
-                        player.addToQueueByData(songsToAdd, Play.LAST);
+                        await runAsAutoDJ(() => player.addToQueueByData(songsToAdd, Play.LAST));
 
                         eventEmitter.emit('AUTODJ_QUEUE_ADDED', {
                             songCount: songsToAdd.length,

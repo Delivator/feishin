@@ -2,6 +2,7 @@ import { t } from 'i18next';
 import { useCallback, useEffect, useMemo, useState, WheelEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useListenTogetherStore } from '/@/renderer/features/listen-together/listen-together';
 import { ListenTogetherButton } from '/@/renderer/features/listen-together/listen-together-button';
 import { PopoverPlayQueue } from '/@/renderer/features/now-playing/components/popover-play-queue';
 import { DlnaCastButton } from '/@/renderer/features/player/components/dlna-cast-button';
@@ -57,6 +58,7 @@ import { SegmentedControl } from '/@/shared/components/segmented-control/segment
 import { Select } from '/@/shared/components/select/select';
 import { Slider } from '/@/shared/components/slider/slider';
 import { Stack } from '/@/shared/components/stack/stack';
+import { Tooltip } from '/@/shared/components/tooltip/tooltip';
 import { useMediaQuery } from '/@/shared/hooks/use-media-query';
 import { useThrottledCallback } from '/@/shared/hooks/use-throttled-callback';
 import { useThrottledValue } from '/@/shared/hooks/use-throttled-value';
@@ -114,6 +116,8 @@ export const RightControls = () => {
 const AutoDJButton = () => {
     const { t } = useTranslation();
     const settings = useAutoDJSettings();
+    const listenTogetherRole = useListenTogetherStore((state) => state.role);
+    const hostAutoDJ = useListenTogetherStore((state) => state.hostAutoDJ);
     const { setSettings } = useSettingsStoreActions();
 
     const strategySelectData = useMemo(
@@ -291,6 +295,31 @@ const AutoDJButton = () => {
         ],
         [setSettings, settings.allowDuplicates, settings.onlySimilar, t],
     );
+
+    // Guests' own auto DJ is paused during a session; show the host's state instead.
+    if (listenTogetherRole === 'guest') {
+        return (
+            <Tooltip
+                label={
+                    hostAutoDJ ? t('listenTogether.autoDJHost') : t('listenTogether.autoDJHostOff')
+                }
+                openDelay={0}
+            >
+                <Button
+                    size="compact-xs"
+                    style={{
+                        color: hostAutoDJ ? 'var(--theme-colors-primary)' : undefined,
+                        cursor: 'default',
+                        opacity: 0.6,
+                    }}
+                    uppercase
+                    variant="transparent"
+                >
+                    {t('setting.autoDJ')}
+                </Button>
+            </Tooltip>
+        );
+    }
 
     return (
         <Popover position="top-end" withArrow>

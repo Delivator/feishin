@@ -1393,6 +1393,7 @@
                 "verticalBorders": "Column borders"
             },
             "label": {
+                "addedBy": "Added by",
                 "actions": "$t(common.action, {\"count\": 2})",
                 "album": "$t(entity.album, {\"count\": 1})",
                 "albumGroup": "Album Group",
@@ -1504,6 +1505,10 @@
         "notFound": "No session found with that code",
         "connectionFailed": "Could not connect to the listen together session",
         "ended": "The listen together session has ended",
+        "addedBy": "Added by {{name}}",
+        "addedByAutoDJ": "Added by Auto DJ",
+        "autoDJHost": "Auto DJ is controlled by the host (currently on)",
+        "autoDJHostOff": "Auto DJ is controlled by the host (currently off)",
         "libraryMismatch": "Listen together needs everyone on the same server. A participant's songs were not found in your library."
     },
     "dragDropZone": {

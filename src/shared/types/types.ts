@@ -166,6 +166,7 @@ export enum PlayerType {
 
 export enum TableColumn {
     ACTIONS = 'actions',
+    ADDED_BY = 'addedBy',
     ALBUM = 'album',
     ALBUM_ARTIST = 'albumArtists',
     ALBUM_COUNT = 'albumCount',

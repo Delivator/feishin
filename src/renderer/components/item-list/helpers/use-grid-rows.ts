@@ -46,6 +46,7 @@ const getDefaultRowsForItemType = (
 const getRowIdFromTableColumn = (tableColumn: TableColumn): null | string => {
     const columnToRowIdMap: Record<TableColumn, null | string> = {
         [TableColumn.ACTIONS]: null,
+        [TableColumn.ADDED_BY]: null,
         [TableColumn.ALBUM]: 'album',
         [TableColumn.ALBUM_ARTIST]: 'albumArtists',
         [TableColumn.ALBUM_COUNT]: 'albumCount',
