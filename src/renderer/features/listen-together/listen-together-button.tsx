@@ -49,6 +49,7 @@ const PublicSessions = () => {
                 <Group gap="sm" key={session.code} wrap="nowrap">
                     <ItemImage
                         className={styles.cover}
+                        containerClassName={styles.cover}
                         enableDebounce={false}
                         enableViewport={false}
                         id={session.song?.imageId ?? undefined}
