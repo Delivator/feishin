@@ -656,3 +656,9 @@ export const leaveSession = () => {
     trusted = new WeakSet();
     setStore({ code: null, hostAutoDJ: false, members: [], role: null, status: 'idle' });
 };
+
+// Close the connection on quit, so peers drop us right away instead of waiting for
+// WebRTC to notice the dead connection.
+window.addEventListener('beforeunload', () => {
+    if (peer) leaveSession();
+});

@@ -204,3 +204,8 @@ useListenTogetherStore.subscribe((state, prev) => {
     if (state.role !== 'host' || state.status !== 'connected') setPublished(false);
     else if (state.members.length !== prev.members.length) tick();
 });
+
+window.addEventListener('beforeunload', () => {
+    reasons.clear();
+    teardown();
+});
