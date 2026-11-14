@@ -1510,6 +1510,11 @@
         "addedByAutoDJ": "Added by Auto DJ",
         "autoDJHost": "Auto DJ is controlled by the host (currently on)",
         "autoDJHostOff": "Auto DJ is controlled by the host (currently off)",
+        "public": "Public session",
+        "publicDescription": "Anyone using this music server can see what's playing and join",
+        "publicSessions": "Public sessions on this server",
+        "noPublicSessions": "No public sessions right now",
+        "nothingPlaying": "Nothing playing",
         "libraryMismatch": "Listen together needs everyone on the same server. A participant's songs were not found in your library."
     },
     "dragDropZone": {

@@ -99,7 +99,7 @@ const QUEUE_LIST_KEYS = [ItemListKey.QUEUE_SONG, ItemListKey.SIDE_QUEUE, ItemLis
 const setStore = (partial: Partial<ListenTogetherState>) =>
     useListenTogetherStore.setState(partial);
 
-const myMember = (): ListenTogetherMember => {
+export const myMember = (): ListenTogetherMember => {
     const server = useAuthStore.getState().currentServer;
     return { name: server?.username || 'Guest', userId: server?.userId ?? null };
 };
@@ -256,7 +256,7 @@ const hashServerUrl = async (url: string) => {
 
 // Identifies the server independent of the URL used to reach it. Jellyfin exposes a
 // stable server id; Subsonic/Navidrome have none, so fall back to a hash of the URL.
-const getServerKey = async () => {
+export const getServerKey = async () => {
     const server = useAuthStore.getState().currentServer;
     if (!server) return '';
     if (server.type === ServerType.JELLYFIN) {
@@ -529,7 +529,7 @@ const startSync = () => {
     ];
 };
 
-const createPeer = (id?: string) =>
+export const createPeer = (id?: string) =>
     new Promise<Peer>((resolve, reject) => {
         const p = id ? new Peer(id) : new Peer();
         p.once('open', () => resolve(p));
