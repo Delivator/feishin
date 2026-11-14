@@ -1506,6 +1506,7 @@
         "connectionFailed": "Could not connect to the listen together session",
         "ended": "The listen together session has ended",
         "addedBy": "Added by {{name}}",
+        "addedByColumnEnabled": "Added an \"Added by\" column to the queue. Toggle it in the queue's table settings.",
         "addedByAutoDJ": "Added by Auto DJ",
         "autoDJHost": "Auto DJ is controlled by the host (currently on)",
         "autoDJHostOff": "Auto DJ is controlled by the host (currently off)",

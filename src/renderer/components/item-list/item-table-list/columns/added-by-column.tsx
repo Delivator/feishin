@@ -8,7 +8,6 @@ import {
     ItemTableListInnerColumn,
     TableColumnContainer,
 } from '/@/renderer/components/item-list/item-table-list/item-table-list-column';
-import { useListenTogetherStore } from '/@/renderer/features/listen-together/listen-together';
 import { useCurrentServer } from '/@/renderer/store';
 import { Icon } from '/@/shared/components/icon/icon';
 import { Tooltip } from '/@/shared/components/tooltip/tooltip';
@@ -53,12 +52,11 @@ const UserAvatar = ({ name, userId }: { name: string; userId?: null | string }) 
 
 export const AddedByColumn = (props: ItemTableListInnerColumn) => {
     const { t } = useTranslation();
-    const inSession = useListenTogetherStore((state) => state.status === 'connected');
     const rowItem = (props.getRowItem?.(props.rowIndex) ??
         (props.data as unknown[])[props.rowIndex]) as QueueSong | undefined;
     const addedBy = rowItem?._addedBy;
 
-    if (!inSession || !addedBy) {
+    if (!addedBy) {
         return <ColumnNullFallback {...props} />;
     }
 

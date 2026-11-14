@@ -91,8 +91,6 @@ let trusted = new WeakSet<DataConnection>();
 let inbox = Promise.resolve();
 // Skip heartbeats while a delayed seek is pending, so they don't broadcast a stale position.
 let seekPendingUntil = 0;
-// Queue entries that existed before the session or were already attributed.
-let knownUids = new Set<string>();
 // >0 while auto DJ is adding songs, so they get attributed to it.
 let autoDJDepth = 0;
 
@@ -110,17 +108,18 @@ export const runAsAutoDJ = async (fn: () => Promise<unknown> | unknown) => {
     autoDJDepth++;
     try {
         await fn();
+        // Tag now, while still flagged; deferred tagging would run after the flag cleared.
+        tagNewSongs();
     } finally {
         autoDJDepth--;
     }
 };
 
-// Attribute queue entries that appeared locally to us (or to auto DJ).
+// Attribute untagged queue entries to us (or to auto DJ). Songs from peers arrive
+// already tagged by whoever added them.
 const tagNewSongs = () => {
     const { queue } = usePlayerStoreBase.getState();
-    const fresh = queue.default.filter((uid) => !knownUids.has(uid));
-    fresh.forEach((uid) => knownUids.add(uid));
-    const untagged = fresh.filter((uid) => queue.songs[uid] && !queue.songs[uid]._addedBy);
+    const untagged = queue.default.filter((uid) => queue.songs[uid] && !queue.songs[uid]._addedBy);
     if (!untagged.length) return;
 
     const addedBy: QueueSongAddedBy = { ...myMember(), ...(autoDJDepth ? { autoDJ: true } : {}) };
@@ -134,9 +133,18 @@ const tagNewSongs = () => {
     });
 };
 
+// Tagging also runs outside sessions, so the column is useful solo (me vs. auto DJ).
+// Deferred: updating the store inside its own listener swallows other notifications.
+let tagTimer: ReturnType<typeof setTimeout> | undefined;
+subscribePlayerQueue(() => {
+    clearTimeout(tagTimer);
+    tagTimer = setTimeout(tagNewSongs, 0);
+});
+
 // Turn the "Added by" column on in the queue views the first time a session starts.
 // Once the column exists in a view's config, the user's choice is left alone.
 const ensureAddedByColumn = () => {
+    let added = false;
     useSettingsStore.setState((state) => {
         QUEUE_LIST_KEYS.forEach((key) => {
             const columns = state.lists[key]?.table.columns;
@@ -149,8 +157,10 @@ const ensureAddedByColumn = () => {
                 pinned: null,
                 width: 60,
             });
+            added = true;
         });
     });
+    if (added) toast.info({ message: i18n.t('listenTogether.addedByColumnEnabled') });
 };
 
 const randomCode = () =>
@@ -306,7 +316,6 @@ const rejectPeer = (conn: DataConnection) => {
 
 const applyQueue = (msg: QueueMessage) => {
     lastQueueSig = queueSig(msg);
-    msg.items.forEach((item) => knownUids.add(item._uniqueId));
     const server = useAuthStore.getState().currentServer;
     if (!server) return;
 
@@ -444,12 +453,8 @@ const receive = (msg: Message, from: DataConnection) => {
         .catch((error) => logger.error('Listen together: message failed', { error }));
 };
 
-const startSync = (role: 'guest' | 'host') => {
+const startSync = () => {
     ensureAddedByColumn();
-    // The host's existing queue is attributed to the host. A guest's queue is about to
-    // be replaced by the host's, so it is left untagged.
-    knownUids = role === 'host' ? new Set() : new Set(usePlayerStoreBase.getState().queue.default);
-    if (role === 'host') tagNewSongs();
     unsubscribers = [
         subscribePlayerQueue(scheduleQueueSend),
         subscribePlayerRepeat(scheduleQueueSend),
@@ -515,7 +520,7 @@ export const hostSession = async () => {
         });
     });
 
-    startSync('host');
+    startSync();
     lastQueueSig = queueSig(buildQueueMessage());
     unsubscribers.push(
         useSettingsStore.subscribe(
@@ -564,7 +569,7 @@ export const joinSession = async (rawCode: string) => {
         leaveSession();
     });
     conn.send(await buildHello());
-    startSync('guest');
+    startSync();
     setStore({ status: 'connected' });
     logger.info('Listen together: joined', { code });
 };
@@ -585,6 +590,5 @@ export const leaveSession = () => {
     p?.destroy();
     lastQueueSig = '';
     trusted = new WeakSet();
-    knownUids = new Set();
     setStore({ code: null, hostAutoDJ: false, members: [], role: null, status: 'idle' });
 };
