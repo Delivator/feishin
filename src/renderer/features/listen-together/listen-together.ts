@@ -314,19 +314,77 @@ const rejectPeer = (conn: DataConnection) => {
     setTimeout(() => conn.close(), 500);
 };
 
+// Favorite, rating and play stats belong to each user's own account, so they never come
+// from a peer. Unknown songs start blank and are filled in from our own server.
+type UserData = Pick<QueueSong, 'lastPlayedAt' | 'playCount' | 'userFavorite' | 'userRating'>;
+const NO_USER_DATA: UserData = {
+    lastPlayedAt: null,
+    playCount: 0,
+    userFavorite: false,
+    userRating: null,
+};
+const pickUserData = (song: UserData): UserData => ({
+    lastPlayedAt: song.lastPlayedAt,
+    playCount: song.playCount,
+    userFavorite: song.userFavorite,
+    userRating: song.userRating,
+});
+
+const loadUserData = async (ids: string[]) => {
+    const server = useAuthStore.getState().currentServer;
+    if (!server) return;
+    for (let i = 0; i < ids.length; i += 5) {
+        const songs = await Promise.all(
+            ids
+                .slice(i, i + 5)
+                .map((id) =>
+                    api.controller
+                        .getSongDetail({ apiClientProps: { serverId: server.id }, query: { id } })
+                        .catch(() => null),
+                ),
+        );
+        const byId = new Map(songs.filter((song) => song).map((song) => [song!.id, song!]));
+        if (!byId.size) continue;
+        applyRemote(() => {
+            usePlayerStoreBase.setState((state) => {
+                Object.values(state.queue.songs).forEach((song) => {
+                    const own = byId.get(song.id);
+                    if (own) Object.assign(song, pickUserData(own));
+                });
+            });
+        });
+    }
+};
+
 const applyQueue = (msg: QueueMessage) => {
     lastQueueSig = queueSig(msg);
     const server = useAuthStore.getState().currentServer;
     if (!server) return;
 
     const currentUid = getCurrentUid();
+    const ownData = new Map(
+        Object.values(usePlayerStoreBase.getState().queue.songs).map((song) => [
+            song.id,
+            pickUserData(song),
+        ]),
+    );
+    const unknownIds = [...new Set(msg.items.map((item) => item.id))].filter(
+        (id) => !ownData.has(id),
+    );
 
     applyRemote(() => {
         usePlayerStoreBase.setState((state) => {
             // Song ids are shared when everyone uses the same library; the server id is
             // local to each install, so point every song at our own current server.
             state.queue.songs = Object.fromEntries(
-                msg.items.map((item) => [item._uniqueId, { ...item, _serverId: server.id }]),
+                msg.items.map((item) => [
+                    item._uniqueId,
+                    {
+                        ...item,
+                        ...(ownData.get(item.id) ?? NO_USER_DATA),
+                        _serverId: server.id,
+                    },
+                ]),
             );
             state.queue.default = msg.items.map((item) => item._uniqueId);
             state.queue.shuffled = msg.shuffled;
@@ -343,6 +401,12 @@ const applyQueue = (msg: QueueMessage) => {
             }
         });
     });
+
+    if (unknownIds.length) {
+        loadUserData(unknownIds).catch((error) =>
+            logger.warn('Listen together: could not load own song data', { error }),
+        );
+    }
 };
 
 const applyState = (msg: StateMessage) => {
