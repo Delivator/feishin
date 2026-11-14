@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import styles from './added-by-column.module.css';
@@ -9,6 +9,7 @@ import {
     TableColumnContainer,
 } from '/@/renderer/components/item-list/item-table-list/item-table-list-column';
 import { useCurrentServer } from '/@/renderer/store';
+import { logger } from '/@/renderer/utils/logger';
 import { Icon } from '/@/shared/components/icon/icon';
 import { Tooltip } from '/@/shared/components/tooltip/tooltip';
 import { QueueSong } from '/@/shared/types/domain-types';
@@ -22,6 +23,13 @@ const UserAvatar = ({ name, userId }: { name: string; userId?: null | string }) 
     const server = useCurrentServer();
     const [imageFailed, setImageFailed] = useState(false);
 
+    // A failed load (e.g. a flaky connection) should not stick to the row forever.
+    useEffect(() => {
+        if (!imageFailed) return undefined;
+        const retry = setTimeout(() => setImageFailed(false), 30000);
+        return () => clearTimeout(retry);
+    }, [imageFailed]);
+
     // Jellyfin serves profile pictures without auth, so each client loads them from its
     // own server URL. Subsonic/Navidrome have no usable per-user pictures.
     const imageUrl =
@@ -34,7 +42,10 @@ const UserAvatar = ({ name, userId }: { name: string; userId?: null | string }) 
             <img
                 alt={name}
                 className={styles.avatar}
-                onError={() => setImageFailed(true)}
+                onError={() => {
+                    logger.warn('Added by: profile picture failed to load', { url: imageUrl });
+                    setImageFailed(true);
+                }}
                 src={imageUrl}
             />
         );
