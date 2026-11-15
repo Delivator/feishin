@@ -2405,6 +2405,9 @@ function recalculatePlayerIndex(state: any, queue: string[]) {
 function toQueueSong(item: Song): QueueSong {
     return {
         ...item,
+        // A new queue entry is added by whoever adds it now, even when the song was
+        // copied from an existing entry (e.g. "play next" from the queue).
+        _addedBy: undefined,
         _uniqueId: nanoid(),
     };
 }
